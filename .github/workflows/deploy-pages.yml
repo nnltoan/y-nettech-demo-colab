@@ -1,0 +1,76 @@
+name: Deploy demo-app to GitHub Pages
+
+# Build và deploy demo-app (Vite + React) lên GitHub Pages
+# URL sau khi deploy: https://nnltoan.github.io/y-nettech-demo-colab/
+#
+# Trigger:
+#   - Push lên main mà có thay đổi trong demo-app/ hoặc workflow này
+#   - Manual trigger qua Actions tab (workflow_dispatch)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'demo-app/**'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+# Permissions cần thiết để deploy lên GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Tránh chạy trùng deploy nếu push liên tiếp
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: demo-app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: demo-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (with GitHub Pages base path)
+        env:
+          DEPLOY_TARGET: github-pages
+        run: npm run build
+
+      - name: Add SPA 404 fallback
+        # Copy index.html thành 404.html để mọi route deep-link đều fallback về app
+        # (Phòng trường hợp sau này thêm React Router)
+        run: cp dist/index.html dist/404.html
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: demo-app/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
