@@ -2764,9 +2764,7 @@ const OperatorDashboard = ({ user, reports, t, lang, onOpenReport, onNewReport }
         </div>
         <button
           onClick={onNewReport}
-          disabled={alreadyReported}
-          className={`flex items-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm shadow-lg ${alreadyReported ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-white text-blue-700 hover:bg-blue-50 active:bg-blue-100'}`}
-          title={alreadyReported ? (lang === 'vi' ? 'Bạn đã báo cáo ca này rồi' : 'このシフトは報告済みです') : ''}
+          className="flex items-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm shadow-lg bg-white text-blue-700 hover:bg-blue-50 active:bg-blue-100"
         >
           <Plus className="w-5 h-5" /> {t.newReport}
         </button>
@@ -2932,9 +2930,7 @@ const TeamLeaderDashboard = ({ user, reports, t, lang, onOpenReport, onNewReport
           {isSubLeaderOperator && onNewReport && (
             <button
               onClick={onNewReport}
-              disabled={slAlreadyReported}
-              className={`flex items-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm shadow-lg ${slAlreadyReported ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-white text-indigo-700 hover:bg-indigo-50 active:bg-indigo-100'}`}
-              title={slAlreadyReported ? (lang === 'vi' ? 'Bạn đã báo cáo ca này rồi' : 'このシフトは報告済みです') : ''}
+              className="flex items-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm shadow-lg bg-white text-indigo-700 hover:bg-indigo-50 active:bg-indigo-100"
             >
               <Plus className="w-5 h-5" /> {t.newReport}
             </button>
@@ -3672,9 +3668,7 @@ const ReportsList = ({ reports, user, t, lang, onOpenReport, onNewReport }) => {
         {canCreateReport && (
           <button
             onClick={onNewReport}
-            disabled={rlAlreadyReported}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium ${rlAlreadyReported ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
-            title={rlAlreadyReported ? (lang === 'vi' ? 'Bạn đã báo cáo ca này rồi' : 'このシフトは報告済みです') : ''}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
           >
             <Plus className="w-4 h-4" /> {t.newReport}
           </button>
