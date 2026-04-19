@@ -8281,9 +8281,18 @@ const IFSIntegrationPage = ({ reports, setReports, t, lang }) => {
 // ============================================================================
 // UI: SETTINGS PAGE
 // ============================================================================
-const SettingsPage = ({ user, t, lang, setLang, otEnabledGlobal, setOtEnabledGlobal }) => {
+const SettingsPage = ({ user, t, lang, setLang, otEnabledGlobal, setOtEnabledGlobal, reports, setReports }) => {
   // Only Ast/Chief (section_manager) can change the OT setting
   const canEditOt = user.role === 'section_manager';
+  const isDirector = user.role === 'director';
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const today = todayStr();
+  const todayReports = (reports || []).filter(r => r.date === today);
+
+  const handleDeleteTodayReports = () => {
+    setReports(prev => prev.filter(r => r.date !== today));
+    setShowDeleteConfirm(false);
+  };
   return (
   <div className="p-6 space-y-4 bg-slate-50 min-h-full">
     <h2 className="text-xl font-bold text-slate-800">{t.settings}</h2>
@@ -8352,6 +8361,53 @@ const SettingsPage = ({ user, t, lang, setLang, otEnabledGlobal, setOtEnabledGlo
           <div className="p-2 rounded bg-blue-50 border border-blue-200"><div className="text-xs text-slate-500">Users</div><div className="font-bold">{mockUsers.length}</div></div>
         </div>
       </div>
+      {/* ============ DEMO RESET — Director only ============ */}
+      {isDirector && (
+        <div className="border-t border-rose-200 pt-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Trash2 className="w-4 h-4 text-rose-600" />
+            <label className="text-sm font-semibold text-rose-700">{lang === 'vi' ? 'Demo Reset — Xóa báo cáo hôm nay' : 'デモリセット — 本日の報告を削除'}</label>
+          </div>
+          <p className="text-xs text-slate-500 mb-3">
+            {lang === 'vi'
+              ? `Xóa toàn bộ báo cáo ngày ${fmtDate(today)} để demo lại từ đầu. Hiện có ${todayReports.length} báo cáo.`
+              : `${fmtDate(today)} の全報告を削除してデモをやり直します。現在 ${todayReports.length} 件の報告があります。`}
+          </p>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={todayReports.length === 0}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold ${todayReports.length === 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-rose-600 text-white hover:bg-rose-700'}`}
+          >
+            <Trash2 className="w-4 h-4" />
+            {lang === 'vi' ? `Xóa ${todayReports.length} báo cáo hôm nay` : `本日の報告 ${todayReports.length} 件を削除`}
+          </button>
+
+          {showDeleteConfirm && (
+            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl max-w-md w-full p-5 shadow-2xl">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="w-5 h-5 text-rose-600" />
+                  <h3 className="font-semibold text-slate-800">
+                    {lang === 'vi' ? 'Xác nhận xóa' : '削除確認'}
+                  </h3>
+                </div>
+                <p className="text-sm text-slate-600 mb-4">
+                  {lang === 'vi'
+                    ? `Bạn có chắc muốn xóa toàn bộ ${todayReports.length} báo cáo ngày ${fmtDate(today)}? Hành động này không thể hoàn tác.`
+                    : `${fmtDate(today)} の報告 ${todayReports.length} 件を全て削除しますか？この操作は元に戻せません。`}
+                </p>
+                <div className="flex items-center justify-end gap-2">
+                  <button onClick={() => setShowDeleteConfirm(false)} className="px-4 py-2 rounded-lg border border-slate-300 text-sm">{t.cancel}</button>
+                  <button onClick={handleDeleteTodayReports} className="px-4 py-2 rounded-lg bg-rose-600 text-white text-sm hover:bg-rose-700">
+                    {lang === 'vi' ? 'Xóa tất cả' : '全て削除'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ============ MIDDLEWARE TEST PANEL (moved from main layout) ============ */}
       <div className="border-t border-slate-200 pt-4 mt-4">
         <label className="text-sm font-medium text-slate-700 mb-2 block">Middleware Test Panel</label>
@@ -8542,7 +8598,7 @@ export default function App() {
           )}
           {currentPage === 'settings' && (
             <PageShell title={pageTitle} icon={Settings}>
-              <SettingsPage user={currentUser} t={t} lang={lang} setLang={setLang} otEnabledGlobal={otEnabledGlobal} setOtEnabledGlobal={setOtEnabledGlobal} />
+              <SettingsPage user={currentUser} t={t} lang={lang} setLang={setLang} otEnabledGlobal={otEnabledGlobal} setOtEnabledGlobal={setOtEnabledGlobal} reports={reports} setReports={setReports} />
             </PageShell>
           )}
         </main>
