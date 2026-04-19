@@ -213,7 +213,7 @@ const STORAGE_KEY = 'fcc_demo_reports';
 const STORAGE_VERSION_KEY = 'fcc_demo_version';
 // ★ Bump this version whenever data structure / seed logic changes.
 //   Mismatched version → auto-clear stale localStorage on next load.
-const DATA_VERSION = '2026-04-19-v9';
+const DATA_VERSION = '2026-04-19-v10';
 
 const loadSavedReports = () => {
   try {
@@ -596,6 +596,8 @@ const translations = {
     withdrawConfirm: 'Bạn có chắc muốn rút ca này? Ca sẽ quay về trạng thái Nháp để chỉnh sửa.',
     withdrawSuccess: 'Đã rút đơn thành công',
     withdrawShiftLabel: 'Rút ca',
+    leaderRecall: 'Rút duyệt',
+    leaderRecallConfirm: 'Bạn có chắc muốn rút duyệt ca này? Ca sẽ quay về trạng thái Chờ duyệt để bạn sửa hoặc từ chối.',
     rejectionHistory: 'Lịch sử từ chối',
     rejectedAt: 'Từ chối lúc',
     resubmittedAt: 'Nộp lại lúc',
@@ -949,6 +951,8 @@ const translations = {
     withdrawConfirm: 'このシフトを取り下げますか？下書きに戻して編集できます。',
     withdrawSuccess: '取り下げが完了しました',
     withdrawShiftLabel: 'シフト取り下げ',
+    leaderRecall: '承認取消',
+    leaderRecallConfirm: 'このシフトの承認を取り消しますか？提出済みに戻して編集または却下できます。',
     rejectionHistory: '却下履歴',
     rejectedAt: '却下日時',
     resubmittedAt: '再提出日時',
@@ -6278,6 +6282,34 @@ const ReportDetail = ({ report, user, reports, setReports, t, lang, onBack, onEd
     persistUpdatedReport(updated);
   };
 
+  // Leader recall: leader can recall their own approval on a shift that is leader_approved
+  // but ONLY if the whole report hasn't been chief_approved yet
+  const canLeaderRecallShift = (sh) =>
+    isLeader &&
+    sh.status === 'leader_approved' &&
+    report.status !== 'chief_approved' &&
+    (!user.shiftNumber || sh.shiftNumber === user.shiftNumber);
+
+  const recallableShifts = (report.shifts || []).map((sh, idx) => ({ sh, idx })).filter(({ sh }) => canLeaderRecallShift(sh));
+  const canLeaderRecall = recallableShifts.length > 0;
+
+  const [recallCtx, setRecallCtx] = useState(null); // { shiftIdx } or null
+
+  const handleLeaderRecall = () => {
+    if (!recallCtx) return;
+    const { shiftIdx } = recallCtx;
+    const updated = {
+      ...report,
+      shifts: report.shifts.map((sh, i) => (
+        i === shiftIdx
+          ? { ...sh, status: 'submitted', approvedByLeader: null, approvedByLeaderAt: null }
+          : sh
+      )),
+    };
+    setRecallCtx(null);
+    persistUpdatedReport(updated);
+  };
+
   // Recompute and persist the updated report so top-level status is derived correctly
   // ★ Dùng functional updater để tránh stale closure
   const persistUpdatedReport = (updated) => {
@@ -6388,6 +6420,9 @@ const ReportDetail = ({ report, user, reports, setReports, t, lang, onBack, onEd
             )}
             {canWithdraw && withdrawableShifts.length > 1 && withdrawableShifts.map(({ sh, idx }) => (
               <button key={idx} onClick={() => setWithdrawCtx({ shiftIdx: idx })} className="px-3 py-1.5 rounded-lg border border-amber-400 bg-amber-50 text-amber-700 text-xs hover:bg-amber-100 flex items-center gap-1"><RotateCcw className="w-3.5 h-3.5" />{t.withdraw} (Ca {sh.shiftNumber})</button>
+            ))}
+            {canLeaderRecall && recallableShifts.map(({ sh, idx }) => (
+              <button key={`recall-${idx}`} onClick={() => setRecallCtx({ shiftIdx: idx })} className="px-3 py-1.5 rounded-lg border border-orange-400 bg-orange-50 text-orange-700 text-xs hover:bg-orange-100 flex items-center gap-1"><RotateCcw className="w-3.5 h-3.5" />{t.leaderRecall} (Ca {sh.shiftNumber})</button>
             ))}
             {canEdit && <button onClick={() => onEdit(report)} className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs hover:bg-slate-100 flex items-center gap-1"><Edit2 className="w-3.5 h-3.5" />{t.edit}</button>}
             {canChiefApprove && (
@@ -6519,7 +6554,15 @@ const ReportDetail = ({ report, user, reports, setReports, t, lang, onBack, onEd
                   </button>
                 </div>
               )}
-              {isLeader && !canReviewThisShift && ['submitted', 'leader_approved', 'rejected'].includes(sh.status) && (
+              {canLeaderRecallShift(sh) && (
+                <button
+                  onClick={() => setRecallCtx({ shiftIdx: si })}
+                  className="px-3 py-1.5 rounded-lg border border-orange-400 bg-orange-50 text-orange-700 text-xs hover:bg-orange-100 flex items-center gap-1"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />{t.leaderRecall}
+                </button>
+              )}
+              {isLeader && !canReviewThisShift && !canLeaderRecallShift(sh) && ['submitted', 'leader_approved', 'rejected'].includes(sh.status) && (
                 <button
                   onClick={() => onEdit(report)}
                   className="px-2 py-1.5 rounded-lg border border-slate-300 text-xs hover:bg-slate-100 flex items-center gap-1"
@@ -6665,6 +6708,25 @@ const ReportDetail = ({ report, user, reports, setReports, t, lang, onBack, onEd
             <div className="flex items-center justify-end gap-2">
               <button onClick={() => setWithdrawCtx(null)} className="px-4 py-2 rounded-lg border border-slate-300 text-sm">{t.cancel}</button>
               <button onClick={handleWithdraw} className="px-4 py-2 rounded-lg bg-amber-600 text-white text-sm hover:bg-amber-700">{t.withdraw}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leader recall confirmation modal */}
+      {recallCtx && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-5 shadow-2xl">
+            <div className="flex items-center gap-2 mb-3">
+              <RotateCcw className="w-5 h-5 text-orange-600" />
+              <h3 className="font-semibold text-slate-800">
+                {t.leaderRecall} · Ca {(report.shifts[recallCtx.shiftIdx]?.shiftNumber) || (recallCtx.shiftIdx + 1)}
+              </h3>
+            </div>
+            <p className="text-sm text-slate-600 mb-4">{t.leaderRecallConfirm}</p>
+            <div className="flex items-center justify-end gap-2">
+              <button onClick={() => setRecallCtx(null)} className="px-4 py-2 rounded-lg border border-slate-300 text-sm">{t.cancel}</button>
+              <button onClick={handleLeaderRecall} className="px-4 py-2 rounded-lg bg-orange-600 text-white text-sm hover:bg-orange-700">{t.leaderRecall}</button>
             </div>
           </div>
         </div>
