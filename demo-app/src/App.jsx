@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import MiddlewarePanel from './MiddlewarePanel';
 import workOrderApi from './api/work-order.api';
 import { adaptShiftForMiddleware } from './adapter/demo-colab-adapter.js';
@@ -212,7 +213,7 @@ const STORAGE_KEY = 'fcc_demo_reports';
 const STORAGE_VERSION_KEY = 'fcc_demo_version';
 // ★ Bump this version whenever data structure / seed logic changes.
 //   Mismatched version → auto-clear stale localStorage on next load.
-const DATA_VERSION = '2026-04-19-v5';
+const DATA_VERSION = '2026-04-19-v9';
 
 const loadSavedReports = () => {
   try {
@@ -537,6 +538,23 @@ const translations = {
     totalNGAuto: 'Tổng NG (tự tính)',
     noDefects: 'Chưa có lỗi sản xuất',
     defectSummary: 'Tổng hợp lỗi',
+    // Tooltips
+    tipNGTest: 'Số sản phẩm hỏng khi test máy đầu ca hoặc sau khi chỉnh máy. Không tính vào sản lượng.',
+    tipNGProd: 'Số sản phẩm lỗi phát sinh trong quá trình sản xuất. Cần nhập chi tiết mã lỗi, nguyên nhân 4M và biện pháp khắc phục.',
+    tipNGPending: 'Sản phẩm nghi ngờ lỗi nhưng chưa phân loại được. Chờ QC kiểm tra và phân loại sau.',
+    tipOK: 'Số lượng sản phẩm đạt chất lượng, tính vào sản lượng thực tế.',
+    tipPlanQty: 'Số lượng kế hoạch sản xuất cho ca này, được tính từ kế hoạch tháng (BM-01).',
+    tipDefectCode: 'Mã lỗi phân loại theo tiêu chuẩn nhà máy (D01-D12). Chọn mã phù hợp nhất.',
+    tipRootCause4M: 'Phân tích nguyên nhân gốc theo 4M: Man (con người), Machine (máy móc), Material (vật liệu), Method (phương pháp).',
+    tipCountermeasure: 'Biện pháp khắc phục đã hoặc sẽ thực hiện để ngăn lỗi tái diễn.',
+    tipDowntime: 'Thời gian máy ngừng hoạt động (phút). Tick chọn lý do và nhập số phút tương ứng.',
+    tipLotNumber: 'Mã lô sản xuất, dùng để truy xuất nguồn gốc sản phẩm.',
+    tipStatusDraft: 'Bản nháp — chưa gửi, có thể chỉnh sửa tự do.',
+    tipStatusSubmitted: 'Đã gửi — đang chờ Sub Leader duyệt ca này.',
+    tipStatusLeaderApproved: 'Sub Leader đã duyệt ca này. Đang chờ Ast/Chief xác nhận.',
+    tipStatusChiefApproved: 'Đã được Ast/Chief xác nhận. Báo cáo hoàn tất.',
+    tipStatusRejected: 'Bị từ chối — cần chỉnh sửa và gửi lại.',
+    tipBulkApprove: 'Duyệt nhanh tất cả báo cáo bình thường (không có cảnh báo bất thường).',
     // Downtime
     downtimeTitle: 'Lý do ngừng máy (phút)',
     downtimeReason: 'Lý do',
@@ -618,6 +636,7 @@ const translations = {
     totalReports: 'Tổng báo cáo',
     todayReports: 'Báo cáo hôm nay',
     achievementRate: 'Tỉ lệ đạt KH',
+    planAchievement: 'Tỉ lệ đạt KH',
     defectRate: 'Tỉ lệ NG',
     downtimeTotal: 'Tổng dừng máy',
     machinesOnline: 'Máy đang hoạt động',
@@ -757,6 +776,13 @@ const translations = {
     totalMachinesShort: 'Tổng máy',
     downtimeTrend14: 'Xu hướng dừng máy 14 ngày',
     ngCategory: 'Phân loại NG',
+    ngByProduct: 'NG theo sản phẩm',
+    rootCause4MChart: 'Nguyên nhân gốc (4M)',
+    downtimeByReason: 'Dừng máy theo lý do',
+    productionTrend: 'Xu hướng sản lượng',
+    totalOK: 'Tổng OK',
+    totalNG: 'Tổng NG',
+    totalPlanLabel: 'Tổng KH',
     productionByLine: 'Sản lượng theo line',
     machineStatus: 'Tình trạng máy',
     today: 'hôm nay',
@@ -870,6 +896,23 @@ const translations = {
     totalNGAuto: '合計NG (自動計算)',
     noDefects: '生産不良なし',
     defectSummary: '不良集計',
+    // Tooltips
+    tipNGTest: '始業時または機械調整後のテストで不良となった製品数。生産数量には含まれません。',
+    tipNGProd: '生産中に発生した不良品数。不良コード、4M原因、対策の詳細入力が必要です。',
+    tipNGPending: '不良の疑いがあるが未分類の製品。QC検査・分類待ち。',
+    tipOK: '品質合格の製品数。実績数量に計上されます。',
+    tipPlanQty: '当シフトの生産計画数。月間計画（BM-01）から算出。',
+    tipDefectCode: '工場基準による不良分類コード（D01〜D12）。最も適切なコードを選択してください。',
+    tipRootCause4M: '4Mによる根本原因分析：Man（人）、Machine（機械）、Material（材料）、Method（方法）。',
+    tipCountermeasure: '不良再発防止のために実施済みまたは実施予定の対策。',
+    tipDowntime: '機械停止時間（分）。理由を選択し、対応する分数を入力してください。',
+    tipLotNumber: '製品トレーサビリティ用の生産ロット番号。',
+    tipStatusDraft: '下書き — 未提出、自由に編集可能。',
+    tipStatusSubmitted: '提出済み — サブリーダーの承認待ち。',
+    tipStatusLeaderApproved: 'サブリーダー承認済み。Ast/Chief確認待ち。',
+    tipStatusChiefApproved: 'Ast/Chiefが確認済み。報告完了。',
+    tipStatusRejected: '却下 — 修正して再提出が必要。',
+    tipBulkApprove: '異常警告のない全ての通常報告を一括承認。',
     downtimeTitle: '停止理由 (分)',
     downtimeReason: '理由',
     downtimeMinutes: '分',
@@ -943,6 +986,7 @@ const translations = {
     totalReports: '総報告数',
     todayReports: '本日の報告',
     achievementRate: '達成率',
+    planAchievement: '達成率',
     defectRate: '不良率',
     downtimeTotal: '総停止時間',
     machinesOnline: '稼働中機械',
@@ -1081,6 +1125,13 @@ const translations = {
     totalMachinesShort: '全機械',
     downtimeTrend14: '停止時間推移 (14日)',
     ngCategory: 'NG種類別',
+    ngByProduct: '製品別NG',
+    rootCause4MChart: '根本原因 (4M)',
+    downtimeByReason: '停止理由別',
+    productionTrend: '生産推移',
+    totalOK: '合計OK',
+    totalNG: '合計NG',
+    totalPlanLabel: '合計計画',
     productionByLine: 'ライン別生産量',
     machineStatus: '機械ステータス',
     today: '本日',
@@ -1834,6 +1885,49 @@ const ShiftStatusDot = ({ status, t }) => {
 };
 
 // ============================================================================
+// UI: INFO TOOLTIP
+// ============================================================================
+const InfoTooltip = ({ text, size = 14 }) => {
+  const [show, setShow] = useState(false);
+  const [pos, setPos] = useState(null);
+  const iconRef = useRef(null);
+  if (!text) return null;
+  const handleShow = () => {
+    if (iconRef.current) {
+      const rect = iconRef.current.getBoundingClientRect();
+      const tipW = 256;
+      let left = rect.left + rect.width / 2 - tipW / 2;
+      if (left < 8) left = 8;
+      if (left + tipW > window.innerWidth - 8) left = window.innerWidth - 8 - tipW;
+      const spaceAbove = rect.top;
+      if (spaceAbove > 80) {
+        setPos({ left, bottom: window.innerHeight - rect.top + 6, top: 'auto', arrowTop: true });
+      } else {
+        setPos({ left, top: rect.bottom + 6, bottom: 'auto', arrowTop: false });
+      }
+    }
+    setShow(true);
+  };
+  return (
+    <span ref={iconRef} className="inline-flex items-center ml-1" onMouseEnter={handleShow} onMouseLeave={() => setShow(false)} onClick={(e) => { e.stopPropagation(); show ? setShow(false) : handleShow(); }}>
+      <svg width={size} height={size} viewBox="0 0 20 20" fill="none" className="text-slate-400 hover:text-blue-500 cursor-help flex-shrink-0">
+        <circle cx="10" cy="10" r="9" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+        <text x="10" y="14.5" textAnchor="middle" fill="currentColor" fontSize="12" fontWeight="600" fontFamily="Arial">?</text>
+      </svg>
+      {show && pos && createPortal(
+        <div style={{ position: 'fixed', left: pos.left, top: pos.top !== 'auto' ? pos.top : undefined, bottom: pos.bottom !== 'auto' ? pos.bottom : undefined, width: 256, zIndex: 9999 }} className="px-3 py-2 text-xs text-white bg-slate-800 rounded-lg shadow-lg leading-relaxed pointer-events-none">
+          {text}
+          {pos.arrowTop
+            ? <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"/>
+            : <span className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-slate-800"/>}
+        </div>,
+        document.body
+      )}
+    </span>
+  );
+};
+
+// ============================================================================
 // UI: STATUS BADGE
 // ============================================================================
 const StatusBadge = ({ status, t, report, user }) => {
@@ -2218,7 +2312,7 @@ const NumberWheelModal = ({ open, value, onSelect, onClose, title, tone = 'defau
   );
 };
 
-const NumberInputTablet = ({ value, onChange, step = 1, min = 0, className = '', tone = 'default', readOnly = false, label, error = false, lang = 'vi' }) => {
+const NumberInputTablet = ({ value, onChange, step = 1, min = 0, className = '', tone = 'default', readOnly = false, label, error = false, lang = 'vi', tooltip }) => {
   const [modalOpen, setModalOpen] = useState(false);
 
   const toneMap = {
@@ -2234,7 +2328,7 @@ const NumberInputTablet = ({ value, onChange, step = 1, min = 0, className = '',
   if (readOnly) {
     return (
       <div className={className}>
-        {label && <label className="text-xs text-slate-500 block mb-1">{label}</label>}
+        {label && <label className="text-xs text-slate-500 mb-1 flex items-center">{label}{tooltip && <InfoTooltip text={tooltip} />}</label>}
         <div className={`px-3 py-3 rounded-xl border-2 text-center text-lg font-bold ${toneMap.plan} flex items-center justify-center gap-2`}>
           <Lock className="w-3.5 h-3.5 text-slate-400" /> {value ?? 0}
         </div>
@@ -2246,7 +2340,7 @@ const NumberInputTablet = ({ value, onChange, step = 1, min = 0, className = '',
 
   return (
     <div className={className}>
-      {label && <label className={`text-xs block mb-1 ${error ? 'text-rose-600 font-semibold' : 'text-slate-500'}`}>{label}{error && ' *'}</label>}
+      {label && <label className={`text-xs mb-1 flex items-center ${error ? 'text-rose-600 font-semibold' : 'text-slate-500'}`}>{label}{error && ' *'}{tooltip && <InfoTooltip text={tooltip} />}</label>}
       <button
         type="button"
         onClick={() => setModalOpen(true)}
@@ -2674,10 +2768,12 @@ const OperatorDashboard = ({ user, reports, t, lang, onOpenReport, onNewReport }
         </button>
       </div>
 
-      {/* Today status — simplified (no plan/NG details) */}
+      {/* Today KPI cards — 4 metrics matching leader/chief layout */}
       {todaySummary ? (
-        <div className="grid grid-cols-2 gap-4">
-          <KpiCard label={t.todayReports} value={todaySummary.totalOK} unit={t.unit} Icon={CheckCircle} tone="emerald" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <KpiCard label={t.todayReports} value={`${myTodayReport ? (myTodayReport.shifts || []).filter(sh => sh.status && sh.status !== 'draft').length : 0}/${(myTodayReport?.shifts || []).length || 3}`} Icon={FileText} tone="blue" />
+          <KpiCard label={t.planAchievement} value={`${todaySummary.achievement}%`} Icon={TrendingUp} tone="emerald" sub={`${todaySummary.totalOK}/${todaySummary.totalPlan}`} />
+          <KpiCard label={t.defectRate} value={`${todaySummary.defectRate}%`} Icon={AlertTriangle} tone="rose" sub={`${todaySummary.totalNGAll} NG`} />
           <KpiCard label={t.downtimeTotal} value={todaySummary.totalDowntime} unit={t.min} Icon={Clock} tone="amber" />
         </div>
       ) : (
@@ -2704,7 +2800,7 @@ const OperatorDashboard = ({ user, reports, t, lang, onOpenReport, onNewReport }
         </ResponsiveContainer>
       </div>
 
-      {/* Recent reports — enlarged for clarity */}
+      {/* Recent reports — rich card layout */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -2716,6 +2812,9 @@ const OperatorDashboard = ({ user, reports, t, lang, onOpenReport, onNewReport }
         </div>
         <div className="divide-y divide-slate-100">
           {myRecent.map(r => {
+            const s = calcReportSummary(r);
+            const firstProduct = r.shifts?.[0]?.productEntries?.[0];
+            const productLabel = firstProduct ? (lang === 'vi' ? firstProduct.productName_vi : firstProduct.productName_ja) || firstProduct.productId : r.machineId;
             return (
               <button key={r.id} onClick={() => onOpenReport(r)} className="w-full px-5 py-4 text-left hover:bg-blue-50/60 active:bg-blue-100 transition-colors flex items-center gap-4">
                 {/* Left: Date block */}
@@ -2724,18 +2823,28 @@ const OperatorDashboard = ({ user, reports, t, lang, onOpenReport, onNewReport }
                   <div className="text-[10px] uppercase text-slate-500 tracking-wide mt-1">{r.date.split('-')[1]}/{r.date.split('-')[0].slice(2)}</div>
                 </div>
 
-                {/* Middle: machine + line + status */}
+                {/* Middle: product + line + status + stats */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-base font-bold text-slate-800">{r.machineId}</span>
-                    <span className="text-xs text-slate-500">· {r.line}</span>
-                  </div>
-                  <div className="mt-1.5">
+                    <span className="text-base font-bold text-slate-800 truncate">{productLabel}</span>
+                    <span className="text-xs text-slate-500 flex-shrink-0">· {r.line}</span>
                     <StatusBadge status={r.status} t={t} report={r} user={user} />
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-3 text-xs text-slate-600">
+                    <span>OK <span className="font-bold text-emerald-700">{s.totalOK}</span>/ {s.totalPlan}</span>
+                    <span>NG <span className="font-bold text-rose-600">{s.totalNGAll}</span></span>
+                    <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" />{s.totalDowntime}{t.min}</span>
                   </div>
                 </div>
 
-                <ChevronRight className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                {/* Right: Achievement badge */}
+                <div className="flex-shrink-0 flex flex-col items-center">
+                  <div className={`w-16 h-16 rounded-xl border-2 flex flex-col items-center justify-center ${s.achievement >= 90 ? 'border-emerald-300 bg-emerald-50' : s.achievement >= 70 ? 'border-amber-300 bg-amber-50' : 'border-rose-300 bg-rose-50'}`}>
+                    <span className="text-[10px] text-slate-500 leading-none">{lang === 'vi' ? 'Đạt' : '達成'}</span>
+                    <span className={`text-lg font-black leading-tight ${s.achievement >= 90 ? 'text-emerald-700' : s.achievement >= 70 ? 'text-amber-700' : 'text-rose-700'}`}>{s.achievement}%</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-300 mt-1" />
+                </div>
               </button>
             );
           })}
@@ -2834,8 +2943,10 @@ const TeamLeaderDashboard = ({ user, reports, t, lang, onOpenReport, onNewReport
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label={t.todayReports} value={`${todayReports.length}/${myDeptMachines.length}`} Icon={FileText} tone="blue" />
+        <KpiCard label={t.planAchievement} value={`${deptStats.ach}%`} Icon={TrendingUp} tone="emerald" sub={`${deptStats.ok}/${deptStats.plan}`} />
+        <KpiCard label={t.defectRate} value={`${deptStats.defect}%`} Icon={AlertTriangle} tone="rose" sub={`${deptStats.ng} NG`} />
         <KpiCard label={t.needsConfirmation} value={pendingShiftsCount} Icon={ClipboardList} tone="amber" />
       </div>
 
@@ -2961,8 +3072,10 @@ const ChiefDashboard = ({ user, reports, t, lang, onOpenReport, setCurrentPage }
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label={t.todayReports} value={`${todayReports.length}/${machines.length}`} Icon={FileText} tone="blue" />
+        <KpiCard label={t.planAchievement} value={`${stats.ach}%`} Icon={TrendingUp} tone="emerald" sub={`${stats.ok}/${stats.plan}`} />
+        <KpiCard label={t.defectRate} value={`${stats.defect}%`} Icon={AlertTriangle} tone="rose" sub={`${stats.ng} NG`} />
         <KpiCard label={t.needsConfirmShort} value={pending.length} Icon={ClipboardCheck} tone="purple" />
       </div>
 
@@ -4995,8 +5108,8 @@ const ReportForm = ({ user, reports, setReports, t, lang, onBack, existingReport
                     {/* Lot + actions row */}
                     <div className="flex items-center gap-2">
                       <div className="flex-1">
-                        <label className={`text-xs font-medium ${hasError(activeShift, `product[${ei}].lot`) ? 'text-rose-600 font-semibold' : 'text-slate-500'}`}>
-                          {t.lotNumber}{hasError(activeShift, `product[${ei}].lot`) && ' *'}
+                        <label className={`text-xs font-medium flex items-center ${hasError(activeShift, `product[${ei}].lot`) ? 'text-rose-600 font-semibold' : 'text-slate-500'}`}>
+                          {t.lotNumber}{hasError(activeShift, `product[${ei}].lot`) && ' *'}<InfoTooltip text={t.tipLotNumber} />
                         </label>
                         <input value={entry.lotNumber}
                           onChange={e => updateProductField(activeShift, ei, 'lotNumber', e.target.value)}
@@ -5019,6 +5132,7 @@ const ReportForm = ({ user, reports, setReports, t, lang, onBack, existingReport
                         tone="plan"
                         readOnly={true}
                         lang={lang}
+                        tooltip={t.tipPlanQty}
                       />
                       <NumberInputTablet
                         label="OK"
@@ -5028,6 +5142,7 @@ const ReportForm = ({ user, reports, setReports, t, lang, onBack, existingReport
                         step={5}
                         error={hasError(activeShift, `product[${ei}].ok`)}
                         lang={lang}
+                        tooltip={t.tipOK}
                       />
                     </div>
 
@@ -5040,6 +5155,7 @@ const ReportForm = ({ user, reports, setReports, t, lang, onBack, existingReport
                         tone="warn"
                         step={1}
                         lang={lang}
+                        tooltip={t.tipNGTest}
                       />
                       <NumberInputTablet
                         label="NG"
@@ -5048,6 +5164,7 @@ const ReportForm = ({ user, reports, setReports, t, lang, onBack, existingReport
                         tone="ng"
                         step={1}
                         lang={lang}
+                        tooltip={t.tipNGProd}
                       />
                       <NumberInputTablet
                         label={t.ngPendingCount}
@@ -5056,6 +5173,7 @@ const ReportForm = ({ user, reports, setReports, t, lang, onBack, existingReport
                         tone="default"
                         step={1}
                         lang={lang}
+                        tooltip={t.tipNGPending}
                       />
                     </div>
 
@@ -5105,7 +5223,7 @@ const ReportForm = ({ user, reports, setReports, t, lang, onBack, existingReport
                             {/* Row 1: Defect Type (modal picker) + Quantity (NumberInputTablet) */}
                             <div className="grid grid-cols-2 gap-2 mb-2">
                               <div>
-                                <label className="text-xs text-slate-500 block mb-1">{t.defectType}</label>
+                                <label className="text-xs text-slate-500 mb-1 flex items-center">{t.defectType}<InfoTooltip text={t.tipDefectCode} /></label>
                                 <button
                                   type="button"
                                   onClick={() => { setNgPickerCtx({ type: 'defectType', entryIdx: ei, defectIdx: di }); setShowNgPicker(true); }}
@@ -5138,7 +5256,7 @@ const ReportForm = ({ user, reports, setReports, t, lang, onBack, existingReport
 
                             {/* Row 2: Root Cause 4M (modal picker) */}
                             <div className="mb-2">
-                              <label className="text-xs text-slate-500 block mb-1">{t.defectDetail}</label>
+                              <label className="text-xs text-slate-500 mb-1 flex items-center">{t.defectDetail}<InfoTooltip text={t.tipRootCause4M} /></label>
                               <button
                                 type="button"
                                 onClick={() => { setNgPickerCtx({ type: 'defectRootCause', entryIdx: ei, defectIdx: di }); setShowNgPicker(true); }}
@@ -5156,7 +5274,7 @@ const ReportForm = ({ user, reports, setReports, t, lang, onBack, existingReport
 
                             {/* Row 3: Countermeasure (modal picker) */}
                             <div>
-                              <label className="text-xs text-slate-500 block mb-1">{t.defectCountermeasure}</label>
+                              <label className="text-xs text-slate-500 mb-1 flex items-center">{t.defectCountermeasure}<InfoTooltip text={t.tipCountermeasure} /></label>
                               <button
                                 type="button"
                                 onClick={() => { setNgPickerCtx({ type: 'defectCountermeasure', entryIdx: ei, defectIdx: di }); setShowNgPicker(true); }}
@@ -5213,7 +5331,7 @@ const ReportForm = ({ user, reports, setReports, t, lang, onBack, existingReport
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <div className="w-1 h-5 bg-rose-500 rounded"></div>
-              <h3 className="font-bold text-slate-800">停止時間 / {t.downtimeTitle}</h3>
+              <h3 className="font-bold text-slate-800 flex items-center">停止時間 / {t.downtimeTitle}<InfoTooltip text={t.tipDowntime} /></h3>
               {currentShift.downtimeEntries.length > 0 && (
                 <span className="inline-flex items-center justify-center min-w-[24px] h-6 px-1.5 rounded-full bg-rose-500 text-white text-xs font-bold">
                   {currentShift.downtimeEntries.length}
@@ -6010,33 +6128,33 @@ const ReportForm_OLD_DISABLED = ({ user, reports, setReports, t, lang, onBack, e
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-6 gap-2 text-xs">
                     <div>
-                      <label className="text-slate-500">{t.lotNumber}</label>
+                      <label className="text-slate-500 flex items-center">{t.lotNumber}<InfoTooltip text={t.tipLotNumber} size={12} /></label>
                       <input value={entry.lotNumber} onChange={e => updateProductField(activeShift, ei, 'lotNumber', e.target.value)}
                         className="mt-0.5 w-full px-2 py-1 rounded border border-slate-200" />
                     </div>
                     <div>
-                      <label className="text-slate-500">{t.planQty}</label>
+                      <label className="text-slate-500 flex items-center">{t.planQty}<InfoTooltip text={t.tipPlanQty} size={12} /></label>
                       <input type="number" value={entry.planQty} onChange={e => updateProductField(activeShift, ei, 'planQty', parseInt(e.target.value) || 0)}
                         className="mt-0.5 w-full px-2 py-1 rounded border border-slate-200 text-right" />
                     </div>
                     <div>
-                      <label className="text-emerald-600 font-medium">OK</label>
+                      <label className="text-emerald-600 font-medium flex items-center">OK<InfoTooltip text={t.tipOK} size={12} /></label>
                       <input type="number" value={entry.okCount} onChange={e => updateProductField(activeShift, ei, 'okCount', parseInt(e.target.value) || 0)}
                         className="mt-0.5 w-full px-2 py-1 rounded border border-emerald-200 text-right font-medium text-emerald-700" />
                     </div>
                     <div>
-                      <label className="text-amber-600">NG TEST</label>
+                      <label className="text-amber-600 flex items-center">NG TEST<InfoTooltip text={t.tipNGTest} size={12} /></label>
                       <input type="number" value={entry.ngTest} onChange={e => updateProductField(activeShift, ei, 'ngTest', parseInt(e.target.value) || 0)}
                         className="mt-0.5 w-full px-2 py-1 rounded border border-amber-200 text-right text-amber-700" />
                     </div>
                     <div>
-                      <label className="text-rose-600">NG {t.total}</label>
+                      <label className="text-rose-600 flex items-center">NG {t.total}<InfoTooltip text={t.tipNGProd} size={12} /></label>
                       <div className="mt-0.5 px-2 py-1 rounded bg-rose-50 text-right text-rose-700 font-medium">
                         {((entry.defectEntries || []).reduce((s, d) => s + (d.quantity || 0), 0) || entry.ng || 0) + (entry.ngTest || 0) + (entry.ngPending || 0)}
                       </div>
                     </div>
                     <div>
-                      <label className="text-slate-500">{t.ngPendingCount}</label>
+                      <label className="text-slate-500 flex items-center">{t.ngPendingCount}<InfoTooltip text={t.tipNGPending} size={12} /></label>
                       <input type="number" value={entry.ngPending} onChange={e => updateProductField(activeShift, ei, 'ngPending', parseInt(e.target.value) || 0)}
                         className="mt-0.5 w-full px-2 py-1 rounded border border-slate-200 text-right" />
                     </div>
@@ -6457,11 +6575,11 @@ const ReportDetail = ({ report, user, reports, setReports, t, lang, onBack, onEd
                   <tr className="text-left">
                     <th className="p-2">{t.productCode}</th>
                     <th className="p-2">{t.lotNumber}</th>
-                    <th className="p-2 text-right">{t.planQty}</th>
-                    <th className="p-2 text-right text-emerald-700">OK</th>
-                    <th className="p-2 text-right text-amber-700">NG TEST</th>
-                    <th className="p-2 text-right text-rose-700">NG</th>
-                    <th className="p-2 text-right">{t.ngPendingCount}</th>
+                    <th className="p-2 text-right"><span className="inline-flex items-center">{t.planQty}<InfoTooltip text={t.tipPlanQty} size={12} /></span></th>
+                    <th className="p-2 text-right text-emerald-700"><span className="inline-flex items-center justify-end">OK<InfoTooltip text={t.tipOK} size={12} /></span></th>
+                    <th className="p-2 text-right text-amber-700"><span className="inline-flex items-center justify-end">NG TEST<InfoTooltip text={t.tipNGTest} size={12} /></span></th>
+                    <th className="p-2 text-right text-rose-700"><span className="inline-flex items-center justify-end">NG<InfoTooltip text={t.tipNGProd} size={12} /></span></th>
+                    <th className="p-2 text-right"><span className="inline-flex items-center justify-end">{t.ngPendingCount}<InfoTooltip text={t.tipNGPending} size={12} /></span></th>
                     <th className="p-2">{t.ngReason}</th>
                     <th className="p-2 text-center">IFS</th>
                   </tr>
@@ -7029,7 +7147,7 @@ const ApprovalsPage = ({ user, reports, setReports, t, lang, onOpenReport }) => 
                     className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 flex items-center gap-1"
                   >
                     <ClipboardCheck className="w-3.5 h-3.5" />
-                    {t.bulkApprove}
+                    {t.bulkApprove}<InfoTooltip text={t.tipBulkApprove} size={12} />
                   </button>
                 </>
               )}
@@ -7295,52 +7413,547 @@ const ApprovalsPage = ({ user, reports, setReports, t, lang, onOpenReport }) => 
 };
 
 // ============================================================================
-// UI: ANALYTICS PAGE (simplified)
+// UI: QA ANALYTICS — NG Deep-dive (toàn nhà máy)
 // ============================================================================
-const AnalyticsPage = ({ reports, t, lang }) => {
-  // By machine
-  const byMachine = useMemo(() => {
-    return machines.map(m => {
-      const machineReports = reports.filter(r => r.machineId === m.id && r.status === 'chief_approved');
-      let plan = 0, ok = 0, ng = 0, dt = 0;
-      machineReports.forEach(r => {
-        const s = calcReportSummary(r);
-        plan += s.totalPlan; ok += s.totalOK; ng += s.totalNGAll; dt += s.totalDowntime;
-      });
-      return { name: m.id, plan, actual: ok, ng, downtime: dt, ach: plan > 0 ? Math.round((ok / plan) * 100) : 0 };
-    });
-  }, [reports]);
+const QAAnalyticsPage = ({ reports, t, lang }) => {
+  const approved = useMemo(() => reports.filter(r => r.status === 'chief_approved' || r.status === 'leader_approved'), [reports]);
+  const COLORS = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#a855f7', '#14b8a6'];
 
-  // NG by reason — aggregate from defectEntries (new model) with fallback to ngReasonId (legacy)
-  const ngByReason = useMemo(() => {
+  // KPI totals
+  const kpi = useMemo(() => {
+    let ok = 0, ng = 0;
+    approved.forEach(r => { const s = calcReportSummary(r); ok += s.totalOK; ng += s.totalNGAll; });
+    return { ok, ng, total: ok + ng, rate: (ok + ng) > 0 ? ((ng / (ok + ng)) * 100).toFixed(2) : '0.00' };
+  }, [approved]);
+
+  // NG trend by date
+  const ngTrend = useMemo(() => {
+    const days = {};
+    approved.forEach(r => {
+      if (!days[r.date]) days[r.date] = { date: r.date.substring(5), ng: 0, ok: 0, rate: 0 };
+      const s = calcReportSummary(r);
+      days[r.date].ng += s.totalNGAll; days[r.date].ok += s.totalOK;
+    });
+    Object.values(days).forEach(d => { d.rate = (d.ok + d.ng) > 0 ? +((d.ng / (d.ok + d.ng)) * 100).toFixed(2) : 0; });
+    return Object.values(days).sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
+  }, [approved]);
+
+  // NG by defect code D01-D12 (Pareto)
+  const ngByDefect = useMemo(() => {
     const map = {};
-    reports.forEach(r => {
-      r.shifts?.forEach(sh => {
-        sh.productEntries?.forEach(pe => {
-          if (pe.defectEntries?.length > 0) {
-            pe.defectEntries.forEach(de => {
-              if (de.defectType) {
-                map[de.defectType] = (map[de.defectType] || 0) + (de.quantity || 1);
-              }
-            });
-          } else if (pe.ngReasonId) {
-            const total = (pe.ng || 0) + (pe.ngTest || 0) + (pe.ngPending || 0);
-            map[pe.ngReasonId] = (map[pe.ngReasonId] || 0) + total;
-          }
-        });
-      });
-    });
-    return Object.entries(map).map(([id, count]) => ({
-      name: `${id} · ${getNGReasonName(id, lang)}`, value: count
-    })).sort((a, b) => b.value - a.value).slice(0, 8);
-  }, [reports, lang]);
+    approved.forEach(r => r.shifts?.forEach(sh => sh.productEntries?.forEach(pe => {
+      if (pe.defectEntries?.length > 0) {
+        pe.defectEntries.forEach(de => { if (de.defectType) map[de.defectType] = (map[de.defectType] || 0) + (de.quantity || 1); });
+      } else if (pe.ngReasonId) {
+        map[pe.ngReasonId] = (map[pe.ngReasonId] || 0) + ((pe.ng || 0) + (pe.ngTest || 0) + (pe.ngPending || 0));
+      }
+    })));
+    const sorted = Object.entries(map).map(([id, count]) => ({
+      name: `${id} · ${getNGReasonName(id, lang)}`, short: id, value: count
+    })).sort((a, b) => b.value - a.value);
+    // Pareto: cumulative %
+    const total = sorted.reduce((s, d) => s + d.value, 0);
+    let cum = 0;
+    sorted.forEach(d => { cum += d.value; d.cumPct = total > 0 ? Math.round((cum / total) * 100) : 0; });
+    return sorted.slice(0, 12);
+  }, [approved, lang]);
 
-  const COLORS = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+  // NG by product
+  const ngByProduct = useMemo(() => {
+    const map = {};
+    approved.forEach(r => r.shifts?.forEach(sh => sh.productEntries?.forEach(pe => {
+      const label = (lang === 'vi' ? pe.productName_vi : pe.productName_ja) || pe.productCode || 'N/A';
+      if (!map[label]) map[label] = { name: label, ng: 0, ok: 0 };
+      map[label].ok += pe.okCount || 0;
+      const peNg = (pe.defectEntries || []).reduce((s, d) => s + (d.quantity || 0), 0) || (pe.ng || 0);
+      map[label].ng += peNg + (pe.ngTest || 0) + (pe.ngPending || 0);
+    })));
+    return Object.values(map).sort((a, b) => b.ng - a.ng);
+  }, [approved, lang]);
+
+  // NG by machine
+  const ngByMachine = useMemo(() => {
+    return machines.map(m => {
+      let ng = 0, ok = 0;
+      approved.filter(r => r.machineId === m.id).forEach(r => { const s = calcReportSummary(r); ng += s.totalNGAll; ok += s.totalOK; });
+      return { name: m.name || m.id, ng, ok, rate: (ok + ng) > 0 ? +((ng / (ok + ng)) * 100).toFixed(2) : 0 };
+    });
+  }, [approved]);
+
+  // 4M root cause
+  const rootCause = useMemo(() => {
+    const cats = { man: 0, machine: 0, material: 0, method: 0 };
+    approved.forEach(r => r.shifts?.forEach(sh => sh.productEntries?.forEach(pe => {
+      (pe.defectEntries || []).forEach(de => { if (de.rootCause4M && cats.hasOwnProperty(de.rootCause4M)) cats[de.rootCause4M] += de.quantity || 1; });
+    })));
+    return [
+      { name: 'Man', value: cats.man, fill: '#3b82f6' },
+      { name: 'Machine', value: cats.machine, fill: '#ef4444' },
+      { name: 'Material', value: cats.material, fill: '#f59e0b' },
+      { name: 'Method', value: cats.method, fill: '#10b981' },
+    ].filter(c => c.value > 0);
+  }, [approved]);
+
+  // NG by shift number
+  const ngByShift = useMemo(() => {
+    const shifts = { 1: { name: 'Ca 1', ng: 0, ok: 0 }, 2: { name: 'Ca 2', ng: 0, ok: 0 }, 3: { name: 'Ca 3', ng: 0, ok: 0 } };
+    approved.forEach(r => r.shifts?.forEach(sh => {
+      const sn = sh.shiftNumber || 1;
+      if (!shifts[sn]) return;
+      sh.productEntries?.forEach(pe => {
+        shifts[sn].ok += pe.okCount || 0;
+        const peNg = (pe.defectEntries || []).reduce((s, d) => s + (d.quantity || 0), 0) || (pe.ng || 0);
+        shifts[sn].ng += peNg + (pe.ngTest || 0) + (pe.ngPending || 0);
+      });
+    }));
+    return Object.values(shifts).map(s => ({ ...s, rate: (s.ok + s.ng) > 0 ? +((s.ng / (s.ok + s.ng)) * 100).toFixed(2) : 0 }));
+  }, [approved]);
 
   return (
     <div className="p-6 space-y-4 bg-slate-50 min-h-full">
-      <h2 className="text-xl font-bold text-slate-800">{t.analytics}</h2>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-xl font-bold text-slate-800">{t.analytics} — {t.qa}</h2>
+        <span className="text-sm text-slate-500 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-lg border border-emerald-200">NG Deep-dive · {lang === 'vi' ? 'Toàn nhà máy' : '全工場'}</span>
+      </div>
 
+      {/* KPI */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KpiCard label={lang === 'vi' ? 'Tổng sản phẩm' : '総生産数'} value={kpi.total.toLocaleString()} Icon={Package} tone="blue" />
+        <KpiCard label={lang === 'vi' ? 'Tổng NG' : '総NG数'} value={kpi.ng.toLocaleString()} Icon={XCircle} tone="rose" />
+        <KpiCard label={t.defectRate} value={`${kpi.rate}%`} Icon={AlertTriangle} tone="rose" />
+        <KpiCard label={lang === 'vi' ? 'Loại lỗi' : '不良種類数'} value={ngByDefect.length} Icon={BarChart3} tone="purple" />
+      </div>
+
+      {/* Row 1: NG Trend + Pareto */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <h3 className="font-semibold text-slate-800 mb-3">{lang === 'vi' ? 'Xu hướng NG theo ngày' : 'NG推移'}</h3>
+          <ResponsiveContainer width="100%" height={260}>
+            <AreaChart data={ngTrend}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="date" stroke="#64748b" fontSize={11} />
+              <YAxis yAxisId="left" stroke="#64748b" fontSize={11} />
+              <YAxis yAxisId="right" orientation="right" stroke="#f59e0b" fontSize={11} unit="%" />
+              <Tooltip />
+              <Legend />
+              <Area yAxisId="left" type="monotone" dataKey="ng" stroke="#ef4444" fill="#fecaca" name="NG" />
+              <Area yAxisId="right" type="monotone" dataKey="rate" stroke="#f59e0b" fill="transparent" strokeDasharray="5 5" name={`${t.defectRate} %`} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <h3 className="font-semibold text-slate-800 mb-3">{lang === 'vi' ? 'Pareto lỗi (D01-D12)' : 'パレート図 (D01-D12)'}</h3>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={ngByDefect}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="short" stroke="#64748b" fontSize={10} />
+              <YAxis yAxisId="left" stroke="#64748b" fontSize={11} />
+              <YAxis yAxisId="right" orientation="right" stroke="#f59e0b" fontSize={11} unit="%" domain={[0, 100]} />
+              <Tooltip />
+              <Bar yAxisId="left" dataKey="value" name="NG" radius={[4, 4, 0, 0]}>
+                {ngByDefect.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Row 2: NG by Product + NG by Machine */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <h3 className="font-semibold text-slate-800 mb-3">{t.ngByProduct}</h3>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={ngByProduct} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis type="number" stroke="#64748b" fontSize={11} />
+              <YAxis dataKey="name" type="category" stroke="#64748b" fontSize={9} width={140} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="ok" fill="#10b981" name="OK" stackId="a" />
+              <Bar dataKey="ng" fill="#ef4444" name="NG" stackId="a" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <h3 className="font-semibold text-slate-800 mb-3">{lang === 'vi' ? 'Tỉ lệ NG theo máy' : '機械別NG率'}</h3>
+          <div className="space-y-2">
+            {ngByMachine.map(m => (
+              <div key={m.name} className="flex items-center gap-3">
+                <div className="w-28 text-sm text-slate-700 font-medium truncate">{m.name}</div>
+                <div className="flex-1 h-6 bg-slate-100 rounded-lg overflow-hidden relative">
+                  <div className={`h-full ${m.rate <= 2 ? 'bg-emerald-500' : m.rate <= 5 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{ width: `${Math.min(100, m.rate * 5)}%` }}></div>
+                  <div className="absolute inset-0 flex items-center px-2 text-xs font-semibold">{m.rate}% · {m.ng} NG</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3: 4M Root Cause + NG by Shift */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <h3 className="font-semibold text-slate-800 mb-3">{t.rootCause4MChart}</h3>
+          {rootCause.length > 0 ? (
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie data={rootCause} cx="50%" cy="50%" innerRadius={45} outerRadius={85} dataKey="value" paddingAngle={2}>
+                  {rootCause.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                </Pie>
+                <Tooltip />
+                <Legend iconType="circle" formatter={(value, entry) => { const item = rootCause.find(c => c.name === value); const total = rootCause.reduce((s, c) => s + c.value, 0); return `${value} ${item && total ? Math.round(item.value / total * 100) : 0}%`; }} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : <div className="text-center text-sm text-slate-400 py-10">{t.noData}</div>}
+        </div>
+
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <h3 className="font-semibold text-slate-800 mb-3">{lang === 'vi' ? 'Tỉ lệ NG theo ca' : 'シフト別NG率'}</h3>
+          <div className="space-y-4 mt-4">
+            {ngByShift.map(s => (
+              <div key={s.name} className="flex items-center gap-4">
+                <div className="w-12 text-sm font-semibold text-slate-700">{s.name}</div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-slate-500">{s.ng} NG / {s.ok + s.ng} {lang === 'vi' ? 'sp' : '個'}</span>
+                    <span className={`text-sm font-bold ${s.rate <= 2 ? 'text-emerald-600' : s.rate <= 5 ? 'text-amber-600' : 'text-rose-600'}`}>{s.rate}%</span>
+                  </div>
+                  <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${s.rate <= 2 ? 'bg-emerald-500' : s.rate <= 5 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{ width: `${Math.min(100, s.rate * 10)}%` }}></div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
+// UI: MAINTENANCE ANALYTICS — Downtime Deep-dive (toàn nhà máy)
+// ============================================================================
+const MaintenanceAnalyticsPage = ({ reports, t, lang }) => {
+  const approved = useMemo(() => reports.filter(r => r.status === 'chief_approved' || r.status === 'leader_approved'), [reports]);
+  const COLORS = ['#f59e0b', '#ef4444', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#a855f7', '#14b8a6'];
+
+  // KPI totals
+  const kpi = useMemo(() => {
+    let totalDt = 0, breakdownDt = 0, reportCount = 0;
+    approved.forEach(r => {
+      reportCount++;
+      r.shifts?.forEach(sh => (sh.downtimeEntries || []).forEach(de => {
+        totalDt += de.minutes || 0;
+        if (de.reasonId === 7) breakdownDt += de.minutes || 0; // reason 7 = Hỏng máy / sửa chữa
+      }));
+    });
+    const avgPerReport = reportCount > 0 ? Math.round(totalDt / reportCount) : 0;
+    return { totalDt, breakdownDt, avgPerReport, reportCount };
+  }, [approved]);
+
+  // Downtime by reason
+  const dtByReason = useMemo(() => {
+    const map = {};
+    approved.forEach(r => r.shifts?.forEach(sh => (sh.downtimeEntries || []).forEach(de => {
+      const key = de.reasonId;
+      if (!map[key]) map[key] = { id: key, name: getDowntimeReasonName(Number(key) || key, lang) || `#${key}`, value: 0, count: 0 };
+      map[key].value += de.minutes || 0;
+      map[key].count++;
+    })));
+    return Object.values(map).sort((a, b) => b.value - a.value);
+  }, [approved, lang]);
+
+  // Downtime by machine
+  const dtByMachine = useMemo(() => {
+    return machines.map(m => {
+      let total = 0, breakdown = 0, scheduled = 0;
+      approved.filter(r => r.machineId === m.id).forEach(r => r.shifts?.forEach(sh => (sh.downtimeEntries || []).forEach(de => {
+        const mins = de.minutes || 0;
+        total += mins;
+        if (de.reasonId === 7) breakdown += mins;
+        if ([1, 2, 12].includes(de.reasonId)) scheduled += mins; // Họp đầu ca, Kiểm tra, Viết báo cáo
+      })));
+      return { name: m.name || m.id, id: m.id, total, breakdown, scheduled, unplanned: total - scheduled };
+    });
+  }, [approved]);
+
+  // Downtime trend by date
+  const dtTrend = useMemo(() => {
+    const days = {};
+    approved.forEach(r => {
+      if (!days[r.date]) days[r.date] = { date: r.date.substring(5), total: 0, breakdown: 0, other: 0 };
+      r.shifts?.forEach(sh => (sh.downtimeEntries || []).forEach(de => {
+        days[r.date].total += de.minutes || 0;
+        if (de.reasonId === 7) days[r.date].breakdown += de.minutes || 0;
+        else days[r.date].other += de.minutes || 0;
+      }));
+    });
+    return Object.values(days).sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
+  }, [approved]);
+
+  // MTBF / MTTR estimation
+  const mtMetrics = useMemo(() => {
+    let totalRuntime = 0, breakdownEvents = 0, breakdownMinutes = 0;
+    approved.forEach(r => {
+      const shiftMinutes = (r.shifts || []).length * 480; // 8h per shift
+      let dtTotal = 0;
+      r.shifts?.forEach(sh => (sh.downtimeEntries || []).forEach(de => {
+        dtTotal += de.minutes || 0;
+        if (de.reasonId === 7) { breakdownEvents++; breakdownMinutes += de.minutes || 0; }
+      }));
+      totalRuntime += shiftMinutes - dtTotal;
+    });
+    const mtbf = breakdownEvents > 0 ? Math.round(totalRuntime / breakdownEvents) : 0;
+    const mttr = breakdownEvents > 0 ? Math.round(breakdownMinutes / breakdownEvents) : 0;
+    return { mtbf, mttr, breakdownEvents };
+  }, [approved]);
+
+  // Top 5 machines by breakdown time
+  const topBreakdown = useMemo(() => dtByMachine.sort((a, b) => b.breakdown - a.breakdown).slice(0, 5), [dtByMachine]);
+
+  return (
+    <div className="p-6 space-y-4 bg-slate-50 min-h-full">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-xl font-bold text-slate-800">{t.analytics} — {t.maintenance}</h2>
+        <span className="text-sm text-slate-500 bg-orange-50 text-orange-700 px-3 py-1 rounded-lg border border-orange-200">Downtime Deep-dive · {lang === 'vi' ? 'Toàn nhà máy' : '全工場'}</span>
+      </div>
+
+      {/* KPI */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KpiCard label={lang === 'vi' ? 'Tổng dừng máy' : '総停止時間'} value={kpi.totalDt.toLocaleString()} unit={t.min} Icon={Clock} tone="amber" />
+        <KpiCard label={lang === 'vi' ? 'Hỏng máy' : '故障時間'} value={kpi.breakdownDt.toLocaleString()} unit={t.min} Icon={AlertTriangle} tone="rose" />
+        <KpiCard label="MTBF" value={mtMetrics.mtbf.toLocaleString()} unit={t.min} Icon={TrendingUp} tone="emerald" sub={`${mtMetrics.breakdownEvents} ${lang === 'vi' ? 'lần hỏng' : '件'}`} />
+        <KpiCard label="MTTR" value={mtMetrics.mttr} unit={t.min} Icon={Clock} tone="rose" sub={lang === 'vi' ? 'Trung bình sửa' : '平均修理時間'} />
+      </div>
+
+      {/* Row 1: Downtime trend + Downtime by reason */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <h3 className="font-semibold text-slate-800 mb-3">{lang === 'vi' ? 'Xu hướng dừng máy' : '停止時間推移'}</h3>
+          <ResponsiveContainer width="100%" height={260}>
+            <AreaChart data={dtTrend}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="date" stroke="#64748b" fontSize={11} />
+              <YAxis stroke="#64748b" fontSize={11} />
+              <Tooltip formatter={(val) => [`${val} ${t.min}`, '']} />
+              <Legend />
+              <Area type="monotone" dataKey="breakdown" stroke="#ef4444" fill="#fecaca" name={lang === 'vi' ? 'Hỏng máy' : '故障'} stackId="1" />
+              <Area type="monotone" dataKey="other" stroke="#f59e0b" fill="#fef3c7" name={lang === 'vi' ? 'Khác' : 'その他'} stackId="1" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <h3 className="font-semibold text-slate-800 mb-3">{t.downtimeByReason}</h3>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={dtByReason.slice(0, 8)} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis type="number" stroke="#64748b" fontSize={11} unit={lang === 'vi' ? ' ph' : ' 分'} />
+              <YAxis dataKey="name" type="category" stroke="#64748b" fontSize={9} width={130} />
+              <Tooltip formatter={(val) => [`${val} ${t.min}`, '']} />
+              <Bar dataKey="value" name={t.downtimeTotal} radius={[0, 4, 4, 0]}>
+                {dtByReason.slice(0, 8).map((d, i) => <Cell key={i} fill={d.id === 7 ? '#ef4444' : COLORS[i % COLORS.length]} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Row 2: Downtime by machine + Top breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <h3 className="font-semibold text-slate-800 mb-3">{lang === 'vi' ? 'Dừng máy theo máy (Kế hoạch vs Ngoài KH)' : '機械別停止 (計画vs非計画)'}</h3>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={dtByMachine}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="name" stroke="#64748b" fontSize={10} angle={-15} textAnchor="end" height={55} />
+              <YAxis stroke="#64748b" fontSize={11} />
+              <Tooltip formatter={(val) => [`${val} ${t.min}`, '']} />
+              <Legend />
+              <Bar dataKey="scheduled" fill="#94a3b8" name={lang === 'vi' ? 'Định kỳ' : '計画停止'} stackId="a" />
+              <Bar dataKey="breakdown" fill="#ef4444" name={lang === 'vi' ? 'Hỏng máy' : '故障'} stackId="a" />
+              <Bar dataKey="unplanned" fill="#f59e0b" name={lang === 'vi' ? 'Ngoài KH khác' : 'その他非計画'} stackId="a" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <h3 className="font-semibold text-slate-800 mb-3">{lang === 'vi' ? 'Top 5 máy hỏng nhiều nhất' : 'Top 5 故障時間'}</h3>
+          <div className="space-y-3 mt-2">
+            {topBreakdown.map((m, i) => (
+              <div key={m.id} className="flex items-center gap-3">
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${i === 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{i + 1}</div>
+                <div className="w-28 text-sm font-medium text-slate-700 truncate">{m.name}</div>
+                <div className="flex-1 h-5 bg-slate-100 rounded-lg overflow-hidden relative">
+                  <div className="h-full bg-rose-500 rounded-lg" style={{ width: `${topBreakdown[0]?.breakdown > 0 ? Math.round(m.breakdown / topBreakdown[0].breakdown * 100) : 0}%` }}></div>
+                  <div className="absolute inset-0 flex items-center px-2 text-[11px] font-semibold">{m.breakdown} {t.min}</div>
+                </div>
+              </div>
+            ))}
+            {topBreakdown.every(m => m.breakdown === 0) && <div className="text-center text-sm text-slate-400 py-6">{t.noData}</div>}
+          </div>
+          <div className="mt-4 p-3 rounded-xl bg-blue-50 border border-blue-200">
+            <div className="text-xs font-semibold text-blue-700 mb-1">MTBF / MTTR</div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div><span className="text-slate-500">MTBF:</span> <span className="font-bold text-emerald-700">{mtMetrics.mtbf.toLocaleString()} {t.min}</span></div>
+              <div><span className="text-slate-500">MTTR:</span> <span className="font-bold text-rose-700">{mtMetrics.mttr} {t.min}</span></div>
+            </div>
+            <div className="text-[11px] text-slate-500 mt-1">{lang === 'vi' ? `${mtMetrics.breakdownEvents} lần hỏng máy trong kỳ` : `${mtMetrics.breakdownEvents}件の故障`}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
+// UI: ANALYTICS PAGE (role-dispatched)
+// ============================================================================
+const AnalyticsPage = ({ reports, user, t, lang }) => {
+  // QA → QA deep-dive | Maintenance → Downtime deep-dive | Others → General
+  if (user?.role === 'qa') return <QAAnalyticsPage reports={reports} t={t} lang={lang} />;
+  if (user?.role === 'maintenance') return <MaintenanceAnalyticsPage reports={reports} t={t} lang={lang} />;
+
+  // ── General Analytics (operator, leader, chief, director) ──
+  // ── Scope filter by role ──
+  // operator → own machine only | team_leader → own dept | chief/ast/director/qa/maint → all
+  const scopedReports = useMemo(() => {
+    const approved = reports.filter(r => r.status === 'chief_approved' || r.status === 'leader_approved');
+    if (user?.role === 'operator') return approved.filter(r => r.machineId === user.machineId);
+    if (user?.role === 'team_leader') return approved.filter(r => r.dept === user.dept);
+    return approved; // section_manager, director, qa, maintenance → all
+  }, [reports, user]);
+  const scopeLabel = user?.role === 'operator' ? (user.machineId || '') : user?.role === 'team_leader' ? (user.dept || '') : (lang === 'vi' ? 'Toàn nhà máy' : '全工場');
+  const scopeMachines = user?.role === 'operator' ? machines.filter(m => m.id === user.machineId) : user?.role === 'team_leader' ? machines.filter(m => m.dept === user.dept) : machines;
+  const approvedReports = scopedReports;
+
+  // ── Summary KPIs ──
+  const totals = useMemo(() => {
+    let plan = 0, ok = 0, ng = 0, dt = 0;
+    approvedReports.forEach(r => { const s = calcReportSummary(r); plan += s.totalPlan; ok += s.totalOK; ng += s.totalNGAll; dt += s.totalDowntime; });
+    return { plan, ok, ng, dt, ach: plan > 0 ? Math.round((ok / plan) * 100) : 0, defect: (ok + ng) > 0 ? ((ng / (ok + ng)) * 100).toFixed(2) : '0.00' };
+  }, [approvedReports]);
+
+  // ── By machine ──
+  const byMachine = useMemo(() => {
+    return scopeMachines.map(m => {
+      const machineReports = approvedReports.filter(r => r.machineId === m.id);
+      let plan = 0, ok = 0, ng = 0, dt = 0;
+      machineReports.forEach(r => { const s = calcReportSummary(r); plan += s.totalPlan; ok += s.totalOK; ng += s.totalNGAll; dt += s.totalDowntime; });
+      return { name: m.name || m.id, id: m.id, plan, actual: ok, ng, downtime: dt, ach: plan > 0 ? Math.round((ok / plan) * 100) : 0 };
+    });
+  }, [approvedReports, scopeMachines]);
+
+  // ── By product ──
+  const byProduct = useMemo(() => {
+    const map = {};
+    approvedReports.forEach(r => {
+      r.shifts?.forEach(sh => sh.productEntries?.forEach(pe => {
+        const label = (lang === 'vi' ? pe.productName_vi : pe.productName_ja) || pe.productCode || 'N/A';
+        if (!map[label]) map[label] = { name: label, ok: 0, ng: 0, plan: 0 };
+        map[label].ok += pe.okCount || 0;
+        map[label].plan += pe.planQty || 0;
+        const peNg = (pe.defectEntries || []).reduce((s, d) => s + (d.quantity || 0), 0) || (pe.ng || 0);
+        map[label].ng += peNg + (pe.ngTest || 0) + (pe.ngPending || 0);
+      }));
+    });
+    return Object.values(map).sort((a, b) => b.ok - a.ok);
+  }, [approvedReports, lang]);
+
+  // ── NG by reason (defect code D01-D12) ──
+  const ngByReason = useMemo(() => {
+    const map = {};
+    approvedReports.forEach(r => {
+      r.shifts?.forEach(sh => sh.productEntries?.forEach(pe => {
+        if (pe.defectEntries?.length > 0) {
+          pe.defectEntries.forEach(de => { if (de.defectType) map[de.defectType] = (map[de.defectType] || 0) + (de.quantity || 1); });
+        } else if (pe.ngReasonId) {
+          map[pe.ngReasonId] = (map[pe.ngReasonId] || 0) + ((pe.ng || 0) + (pe.ngTest || 0) + (pe.ngPending || 0));
+        }
+      }));
+    });
+    return Object.entries(map).map(([id, count]) => ({
+      name: `${id} · ${getNGReasonName(id, lang)}`, value: count
+    })).sort((a, b) => b.value - a.value).slice(0, 10);
+  }, [approvedReports, lang]);
+
+  // ── 4M Root Cause breakdown ──
+  const rootCause4M = useMemo(() => {
+    const cats = { man: 0, machine: 0, material: 0, method: 0 };
+    const details = {};
+    approvedReports.forEach(r => {
+      r.shifts?.forEach(sh => sh.productEntries?.forEach(pe => {
+        (pe.defectEntries || []).forEach(de => {
+          if (de.rootCause4M && cats.hasOwnProperty(de.rootCause4M)) {
+            cats[de.rootCause4M] += de.quantity || 1;
+          }
+          if (de.rootCauseDetail) {
+            details[de.rootCauseDetail] = (details[de.rootCauseDetail] || 0) + (de.quantity || 1);
+          }
+        });
+      }));
+    });
+    const catData = [
+      { name: 'Man', value: cats.man, fill: '#3b82f6' },
+      { name: 'Machine', value: cats.machine, fill: '#ef4444' },
+      { name: 'Material', value: cats.material, fill: '#f59e0b' },
+      { name: 'Method', value: cats.method, fill: '#10b981' },
+    ].filter(c => c.value > 0);
+    const detailData = Object.entries(details).map(([id, count]) => ({
+      name: `${id} · ${getRootCauseName(id, lang)}`, value: count
+    })).sort((a, b) => b.value - a.value).slice(0, 8);
+    return { catData, detailData };
+  }, [approvedReports, lang]);
+
+  // ── Production trend (daily, last 14 days) ──
+  const prodTrend = useMemo(() => {
+    const days = {};
+    approvedReports.forEach(r => {
+      if (!days[r.date]) days[r.date] = { date: r.date.substring(5), ok: 0, ng: 0, plan: 0 };
+      const s = calcReportSummary(r);
+      days[r.date].ok += s.totalOK; days[r.date].ng += s.totalNGAll; days[r.date].plan += s.totalPlan;
+    });
+    return Object.values(days).sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
+  }, [approvedReports]);
+
+  // ── Downtime by reason ──
+  const dtByReason = useMemo(() => {
+    const map = {};
+    approvedReports.forEach(r => {
+      r.shifts?.forEach(sh => {
+        (sh.downtimeEntries || []).forEach(de => {
+          const key = de.reasonId;
+          map[key] = (map[key] || 0) + (de.minutes || 0);
+        });
+      });
+    });
+    return Object.entries(map).map(([id, mins]) => ({
+      name: getDowntimeReasonName(Number(id) || id, lang) || `#${id}`, value: mins
+    })).sort((a, b) => b.value - a.value).slice(0, 10);
+  }, [approvedReports, lang]);
+
+  const COLORS = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#a855f7', '#14b8a6'];
+  const COLORS_4M = ['#3b82f6', '#ef4444', '#f59e0b', '#10b981'];
+
+  return (
+    <div className="p-6 space-y-4 bg-slate-50 min-h-full">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-xl font-bold text-slate-800">{t.analytics}</h2>
+        <span className="text-sm text-slate-500 bg-white px-3 py-1 rounded-lg border border-slate-200">{scopeLabel}</span>
+      </div>
+
+      {/* Summary KPI row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <KpiCard label={t.totalPlanLabel} value={totals.plan.toLocaleString()} Icon={FileText} tone="blue" />
+        <KpiCard label={t.totalOK} value={totals.ok.toLocaleString()} Icon={CheckCircle} tone="emerald" sub={`${totals.ach}%`} />
+        <KpiCard label={t.totalNG} value={totals.ng.toLocaleString()} Icon={AlertTriangle} tone="rose" sub={`${totals.defect}%`} />
+        <KpiCard label={t.downtimeTotal} value={totals.dt} unit={t.min} Icon={Clock} tone="amber" />
+      </div>
+
+      {/* Row 1: Production by machine + NG by defect code */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
           <h3 className="font-semibold text-slate-800 mb-3">{t.achievementRateByMachine}</h3>
@@ -7359,11 +7972,11 @@ const AnalyticsPage = ({ reports, t, lang }) => {
         </div>
 
         <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
-          <h3 className="font-semibold text-slate-800 mb-3">{t.ngCategory}</h3>
+          <h3 className="font-semibold text-slate-800 mb-3">{t.ngCategory} (D01-D12)</h3>
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie data={ngByReason} cx="50%" cy="50%" labelLine={false} outerRadius={90} dataKey="value">
-                {ngByReason.map((entry, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                {ngByReason.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
               </Pie>
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: 10 }} />
@@ -7372,16 +7985,93 @@ const AnalyticsPage = ({ reports, t, lang }) => {
         </div>
       </div>
 
+      {/* Row 2: Production trend + 4M root cause */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <h3 className="font-semibold text-slate-800 mb-3">{t.productionTrend}</h3>
+          <ResponsiveContainer width="100%" height={260}>
+            <AreaChart data={prodTrend}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="date" stroke="#64748b" fontSize={11} />
+              <YAxis stroke="#64748b" fontSize={11} />
+              <Tooltip />
+              <Legend />
+              <Area type="monotone" dataKey="plan" stroke="#94a3b8" fill="#e2e8f0" name={t.planQty} />
+              <Area type="monotone" dataKey="ok" stroke="#10b981" fill="#a7f3d0" name="OK" />
+              <Area type="monotone" dataKey="ng" stroke="#ef4444" fill="#fecaca" name="NG" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <h3 className="font-semibold text-slate-800 mb-3">{t.rootCause4MChart}</h3>
+          {rootCause4M.catData.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <ResponsiveContainer width="100%" height={240}>
+                <PieChart>
+                  <Pie data={rootCause4M.catData} cx="50%" cy="50%" innerRadius={45} outerRadius={85} dataKey="value" paddingAngle={2}>
+                    {rootCause4M.catData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                  </Pie>
+                  <Tooltip formatter={(val, name) => [val, name]} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} formatter={(value, entry) => { const item = rootCause4M.catData.find(c => c.name === value); return `${value} ${item ? Math.round(item.value / rootCause4M.catData.reduce((s, c) => s + c.value, 0) * 100) : 0}%`; }} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-1.5 pt-1 overflow-y-auto max-h-[230px]">
+                <div className="text-[11px] text-slate-500 font-medium mb-1">{lang === 'vi' ? 'Chi tiết nguyên nhân' : '原因詳細'}</div>
+                {rootCause4M.detailData.map((d, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs gap-2">
+                    <span className="text-slate-700 truncate">{d.name}</span>
+                    <span className="font-bold text-slate-800 tabular-nums flex-shrink-0">{d.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : <div className="text-center text-sm text-slate-400 py-10">{t.noData}</div>}
+        </div>
+      </div>
+
+      {/* Row 3: By product + Downtime by reason */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <h3 className="font-semibold text-slate-800 mb-3">{t.ngByProduct}</h3>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={byProduct} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis type="number" stroke="#64748b" fontSize={11} />
+              <YAxis dataKey="name" type="category" stroke="#64748b" fontSize={9} width={140} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="ok" fill="#10b981" name="OK" stackId="a" />
+              <Bar dataKey="ng" fill="#ef4444" name="NG" stackId="a" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
+          <h3 className="font-semibold text-slate-800 mb-3">{t.downtimeByReason}</h3>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={dtByReason} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis type="number" stroke="#64748b" fontSize={11} unit={lang === 'vi' ? ' ph' : ' 分'} />
+              <YAxis dataKey="name" type="category" stroke="#64748b" fontSize={9} width={130} />
+              <Tooltip formatter={(val) => [`${val} ${t.min}`, '']} />
+              <Bar dataKey="value" fill="#f59e0b" name={t.downtimeTotal} radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Achievement progress bars by machine */}
       <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
         <h3 className="font-semibold text-slate-800 mb-3">{t.achievementByMachine} (%)</h3>
         <div className="space-y-2">
           {byMachine.map(m => (
-            <div key={m.name} className="flex items-center gap-3">
-              <div className="w-24 text-sm text-slate-700 font-medium">{m.name}</div>
+            <div key={m.id} className="flex items-center gap-3">
+              <div className="w-28 text-sm text-slate-700 font-medium truncate">{m.name}</div>
               <div className="flex-1 h-6 bg-slate-100 rounded-lg overflow-hidden relative">
                 <div className={`h-full ${m.ach >= 95 ? 'bg-emerald-500' : m.ach >= 80 ? 'bg-amber-500' : 'bg-rose-500'}`} style={{ width: `${Math.min(100, m.ach)}%` }}></div>
                 <div className="absolute inset-0 flex items-center px-2 text-xs font-semibold">
-                  {m.ach}% · {m.actual} / {m.plan}
+                  {m.ach}% · {m.actual.toLocaleString()} / {m.plan.toLocaleString()}
                 </div>
               </div>
             </div>
@@ -7786,7 +8476,7 @@ export default function App() {
           )}
           {currentPage === 'analytics' && (
             <PageShell title={pageTitle} icon={BarChart3}>
-              <AnalyticsPage reports={reports} t={t} lang={lang} />
+              <AnalyticsPage reports={reports} user={currentUser} t={t} lang={lang} />
             </PageShell>
           )}
           {currentPage === 'ifs' && (
